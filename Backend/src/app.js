@@ -4,23 +4,27 @@ import cors from "cors";
 
 const app = express();
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-const allowedOrigins = new Set([
- "https://interview-ai-eight-tau.vercel.app",
-]);
+// This is the new, more flexible CORS configuration
 
 app.use(
   cors({
     origin(origin, cb) {
-      if (!origin) return cb(null, true);
-      if (allowedOrigins.has(origin)) return cb(null, true);
-      return cb(new Error("Not allowed by CORS"));
+      if (!origin) return cb(null, true); // Allow requests with no origin (like mobile apps or curl requests)
+
+      // Allow if the origin is a vercel.app subdomain or one of the local dev environments
+      const allowed =
+        origin.endsWith(".vercel.app") ||
+        origin.startsWith("http://localhost:") ||
+        origin.startsWith("http://127.0.0.1:");
+
+      if (allowed) {
+        return cb(null, true);
+      } else {
+        return cb(new Error("Not allowed by CORS"));
+      }
     },
     credentials: true,
-    optionsSuccessStatus: 204,
-  }),
+  })
 );
 
 /* require all the routes here */
