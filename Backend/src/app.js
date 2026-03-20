@@ -4,19 +4,21 @@ import cors from "cors";
 
 const app = express();
 
-// This is the new, more flexible CORS configuration
+// --- These lines were restored ---
+app.use(express.json()); // Parses incoming JSON requests
+app.use(express.urlencoded({ extended: true })); // Parses URL-encoded data
+app.use(cookieParser()); // Parses cookies
+// --------------------------------
 
+// This is the flexible CORS configuration
 app.use(
   cors({
     origin(origin, cb) {
-      if (!origin) return cb(null, true); // Allow requests with no origin (like mobile apps or curl requests)
-
-      // Allow if the origin is a vercel.app subdomain or one of the local dev environments
+      if (!origin) return cb(null, true);
       const allowed =
         origin.endsWith(".vercel.app") ||
         origin.startsWith("http://localhost:") ||
         origin.startsWith("http://127.0.0.1:");
-
       if (allowed) {
         return cb(null, true);
       } else {
@@ -31,10 +33,12 @@ app.use(
 import authRouter from "./routes/auth.routes.js";
 import interviewRouter from "./routes/interview.routes.js";
 
-/* using all the routes here */
+/* --- And these route handlers were restored --- */
 app.use("/api/auth", authRouter);
 app.use("/api/interview", interviewRouter);
+// ---------------------------------------------
 
+// Health check endpoint
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
