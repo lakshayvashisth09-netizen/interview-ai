@@ -6,51 +6,33 @@ import interviewRouter from "./routes/interview.routes.js";
 
 const app = express();
 
-// 1. Health check (Sabse upar taaki deployment verify ho sake)
-app.get("/api/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
-
-// 2. CORS Middleware
-const allowedOrigins = [
-  "https://interview-ai-eight-tau.vercel.app",
-  "http://localhost:5173",
-  "http://127.0.0.1:5173"
-];
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // Allow requests with no origin
-      if (!origin) return callback(null, true);
-      
-      const isAllowed = allowedOrigins.includes(origin) || origin.endsWith(".vercel.app");
-      
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        console.log("CORS Blocked for origin:", origin);
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"]
-  })
-);
-
-/** * CRITICAL FIX: 
- * Purane versions mein app.options("*") chalta tha, 
- * lekin Express ke naye path-to-regexp version mein ye crash karta hai.
- * Isliye hum manually OPTIONS handle kar rahe hain jo hamesha chalega.
- */
+// 1. Manual CORS handling (Isse cors() library ki zaroorat nahi padegi)
 app.use((req, res, next) => {
+  const allowedOrigins = [
+    "https://interview-ai-eight-tau.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+  ];
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin) || (origin && origin.endsWith(".vercel.app"))) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  // OPTIONS request ko turant handle karein (Preflight fix)
   if (req.method === "OPTIONS") {
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
     return res.sendStatus(200);
   }
   next();
+});
+
+// 2. Health check
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
 });
 
 // 3. Parsers
