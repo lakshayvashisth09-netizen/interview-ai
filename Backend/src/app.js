@@ -6,7 +6,12 @@ import interviewRouter from "./routes/interview.routes.js";
 
 const app = express();
 
-// 1. CORS Middleware (Improved)
+// 1. Health check (Sabse upar taaki deployment verify ho sake)
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
+// 2. CORS Middleware
 const allowedOrigins = [
   "https://interview-ai-eight-tau.vercel.app",
   "http://localhost:5173",
@@ -16,7 +21,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps or curl)
+      // Allow requests with no origin
       if (!origin) return callback(null, true);
       
       const isAllowed = allowedOrigins.includes(origin) || origin.endsWith(".vercel.app");
@@ -24,7 +29,7 @@ app.use(
       if (isAllowed) {
         callback(null, true);
       } else {
-        console.log("CORS Blocked for origin:", origin); // Debugging ke liye
+        console.log("CORS Blocked for origin:", origin);
         callback(new Error("Not allowed by CORS"));
       }
     },
@@ -34,21 +39,27 @@ app.use(
   })
 );
 
-// Preflight requests (OPTIONS) ko handle karne ke liye
-app.options("*", cors());
+/** * CRITICAL FIX: 
+ * Purane versions mein app.options("*") chalta tha, 
+ * lekin Express ke naye path-to-regexp version mein ye crash karta hai.
+ * Isliye hum manually OPTIONS handle kar rahe hain jo hamesha chalega.
+ */
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    return res.sendStatus(200);
+  }
+  next();
+});
 
-// 2. Parsers
+// 3. Parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// 3. Routes
+// 4. Routes
 app.use("/api/auth", authRouter);
 app.use("/api/interview", interviewRouter);
-
-// 4. Health check (Iska URL ab browser mein check karna)
-app.get("/api/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
 
 export default app;
