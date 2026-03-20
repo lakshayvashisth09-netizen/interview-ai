@@ -1,20 +1,16 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import authRouter from "./routes/auth.routes.js";
+import interviewRouter from "./routes/interview.routes.js";
 
 const app = express();
 
-// --- These lines were restored ---
-app.use(express.json()); // Parses incoming JSON requests
-app.use(express.urlencoded({ extended: true })); // Parses URL-encoded data
-app.use(cookieParser()); // Parses cookies
-// --------------------------------
-
-// This is the flexible CORS configuration
+// 1. CORS Middleware
 app.use(
   cors({
     origin(origin, cb) {
-      if (!origin) return cb(null, true);
+      if (!origin) return cb(null, true); // Allow requests with no origin
       const allowed =
         origin.endsWith(".vercel.app") ||
         origin.startsWith("http://localhost:") ||
@@ -26,19 +22,19 @@ app.use(
       }
     },
     credentials: true,
-  })
+  }),
 );
 
-/* require all the routes here */
-import authRouter from "./routes/auth.routes.js";
-import interviewRouter from "./routes/interview.routes.js";
+// 2. Parsers
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-/* --- And these route handlers were restored --- */
+// 3. Routes
 app.use("/api/auth", authRouter);
 app.use("/api/interview", interviewRouter);
-// ---------------------------------------------
 
-// Health check endpoint
+// 4. Health check
 app.get("/api/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
