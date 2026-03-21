@@ -1,152 +1,118 @@
-import userModel from "../models/user.model.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import tokenBlacklistModel from "../models/blacklist.model.js";
-import mongoose from "mongoose";
+import User from "../models/user.model.js";
+import Blacklist from "../models/blacklist.model.js";
 
-/**
- * @name registerUserController
- * @description register a new user, expects username, email and password in the request body
- * @access Public
- */
-export async function registerUserController(req, res) {
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({ message: "Database not connected" });
-  }
-  const { username, email, password } = req.body;
+// ================= REGISTER =================
+export const registerUserController = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
 
-  if (!username || !email || !password) {
-    return res.status(400).json({
-      message: "Please provide username, email and password",
+    if (!email || !password) {
+      return res.status(400).json({ message: "All fields required" });
+    }
+
+    const existingUser = await User.findOne({ email });
+
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await User.create({
+      email,
+      password: hashedPassword,
     });
-  }
 
-  const isUserAlreadyExists = await userModel.findOne({
-    $or: [{ username }, { email }],
-  });
-
-  if (isUserAlreadyExists) {
-    return res.status(400).json({
-      message: "Account already exists with this email address or username",
+    res.status(201).json({
+      success: true,
+      message: "User registered",
+      user: { id: user._id, email: user.email },
     });
+
+  } catch (err) {
+    next(err);
   }
+};
 
-  const hash = await bcrypt.hash(password, 10);
+// ================= LOGIN =================
+export const loginUserController = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
 
-  const user = await userModel.create({
-    username,
-    email,
-    password: hash,
-  });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email & Password required" });
+    }
 
-  const token = jwt.sign(
-    { id: user._id, username: user.username },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" },
-  );
+    const user = await User.findOne({ email });
 
-  res.cookie("token", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    maxAge: 24 * 60 * 60 * 1000,
-  });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-  res.status(201).json({
-    message: "User registered successfully",
-    user: {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-    },
-  });
-}
+    const isMatch = await bcrypt.compare(password, user.password);
 
-/**
- * @name loginUserController
- * @description login a user, expects email and password in the request body
- * @access Public
- */
-export async function loginUserController(req, res) {
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({ message: "Database not connected" });
-  }
-  const { email, password } = req.body;
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
 
-  const user = await userModel.findOne({ email });
+    const token = jwt.sign(
+      { userId: user._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
 
-  if (!user) {
-    return res.status(400).json({
-      message: "Invalid email or password",
+    // ✅ CRITICAL FIX (cookie issue solve karega)
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
     });
-  }
 
-  const isPasswordValid = await bcrypt.compare(password, user.password);
-
-  if (!isPasswordValid) {
-    return res.status(400).json({
-      message: "Invalid email or password",
+    res.status(200).json({
+      success: true,
+      message: "Login successful",
+      user: {
+        id: user._id,
+        email: user.email,
+      },
     });
+
+  } catch (err) {
+    next(err);
   }
+};
 
-  const token = jwt.sign(
-    { id: user._id, username: user.username },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" },
-  );
+// ================= LOGOUT =================
+export const logoutUserController = async (req, res, next) => {
+  try {
+    const token = req.cookies.token;
 
-  res.cookie("token", token, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: false,
-    maxAge: 24 * 60 * 60 * 1000,
-  });
-  res.status(200).json({
-    message: "User loggedIn successfully.",
-    user: {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-    },
-  });
-}
+    if (token) {
+      await Blacklist.create({ token });
+    }
 
-/**
- * @name logoutUserController
- * @description clear token from user cookie and add the token in blacklist
- * @access public
- */
-export async function logoutUserController(req, res) {
-  const token = req.cookies.token;
+    res.clearCookie("token");
 
-  if (token) {
-    await tokenBlacklistModel.create({ token });
+    res.status(200).json({
+      success: true,
+      message: "Logged out successfully",
+    });
+
+  } catch (err) {
+    next(err);
   }
+};
 
-  res.clearCookie("token");
-
-  res.status(200).json({
-    message: "User logged out successfully",
-  });
-}
-
-/**
- * @name getMeController
- * @description get the current logged in user details.
- * @access private
- */
-export async function getMeController(req, res) {
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({ message: "Database not connected" });
+// ================= GET ME =================
+export const getMeController = async (req, res, next) => {
+  try {
+    res.status(200).json({
+      success: true,
+      user: req.user,
+    });
+  } catch (err) {
+    next(err);
   }
-  const user = await userModel.findById(req.user.id);
-
-  res.status(200).json({
-    message: "User details fetched successfully",
-    user: {
-      id: user._id,
-      username: user.username,
-      email: user.email,
-    },
-  });
-}
+};
